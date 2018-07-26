@@ -127,11 +127,6 @@ def main():
     if FLAGS.training:
         check_existing_folder(FULL_CHECKPOINT_PATH)
         check_existing_folder(FULL_SUMMARY_PATH)
-        
-    if FLAGS.save_replays_every > 0:
-        if FLAGS.replay_dir == "":
-            print("Need to specify a replay dir!")
-            return
 
     if FLAGS.save_replays_every > 0:
         if FLAGS.replay_dir == "":
