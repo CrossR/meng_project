@@ -12,12 +12,15 @@ from absl import flags
 from agent.agent import A2C
 from agent.runner import Runner
 from common.multienv import SubprocVecEnv, make_sc2env
+from tensorflow.python import debug as tf_debug
 
 # Flags taken from example code at https://github.com/xhujoy/pysc2-agents/blob/master/main.py
 
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean("training", True, "Should the agent be trained.")
 flags.DEFINE_boolean("visualize", False, "Whether to render with PyGame.")
+flags.DEFINE_boolean("debug", False, "Whether to start tfdbg.")
+
 flags.DEFINE_integer("resolution", 32, "Resolution for screen and mini-map feature layers.")
 flags.DEFINE_integer("step_mul", 8, "Game steps per agent step.")
 flags.DEFINE_integer("n_envs", 1, "Number of environments to run in parallel.")
@@ -26,6 +29,7 @@ flags.DEFINE_integer("all_summary_freq", 50, "Record all summaries every n batch
 flags.DEFINE_integer("scalar_summary_freq", 5, "Record scalar summaries every n batch.")
 flags.DEFINE_integer("K_batches", -1, "Number of training in thousands, -1 to run forever.")
 flags.DEFINE_integer("save_replays_every", 0, "How often to save a replay, 0 for never.")
+
 flags.DEFINE_string("checkpoint_path", "_files/models", "Path for agent checkpoints.")
 flags.DEFINE_string("summary_path", "_files/summaries", "Path for tensorboard summaries.")
 flags.DEFINE_string("model_name", "temp_testing", "Name for checkpoints and tensorboard summaries.")
@@ -43,6 +47,7 @@ flags.DEFINE_float("entropy_weight_action", 1e-6, "Entropy of action-id distribu
 
 FLAGS(sys.argv)
 
+FULL_REPLAY_PATH = os.path.join(FLAGS.replay_dir, FLAGS.model_name)
 FULL_CHECKPOINT_PATH = os.path.join(FLAGS.checkpoint_path, FLAGS.model_name)
 HAVE_BEEN_KILLED = False
 
@@ -128,6 +133,12 @@ def main():
             print("Need to specify a replay dir!")
             return
 
+    if FLAGS.save_replays_every > 0:
+        if FLAGS.replay_dir == "":
+            print("Need to specify a replay dir!")
+            return
+        os.makedirs(FULL_REPLAY_PATH, exist_ok=True)
+
     environment_arguments = dict(
         map_name=FLAGS.map_name,
         step_mul=FLAGS.step_mul,
@@ -136,16 +147,22 @@ def main():
         minimap_size_px=(FLAGS.resolution,) * 2,
         visualize=FLAGS.visualize,
         save_replay_episodes=FLAGS.save_replays_every,
-        replay_dir=FLAGS.replay_dir
+        replay_dir=FULL_REPLAY_PATH
     )
 
     environment = SubprocVecEnv(
         (partial(make_sc2env, **environment_arguments),) * FLAGS.n_envs
     )
 
+    print(f"Environment arguments are: {environment_arguments}")
+
     # Setup the agent and its runner.
     tf.reset_default_graph()
     session = tf.Session()
+
+    if FLAGS.debug:
+        # Needs pyreadline installed (on Windows at least)
+        session = tf_debug.LocalCLIDebugWrapperSession(session)
 
     agent = A2C(
         session=session,
